@@ -1,5 +1,6 @@
 package me.chanjar.weixin.cp.api;
 
+import lombok.NonNull;
 import me.chanjar.weixin.common.error.WxErrorException;
 import me.chanjar.weixin.cp.bean.*;
 
@@ -15,6 +16,83 @@ import java.util.List;
  * @author <a href="https://github.com/JoeCao">JoeCao</a>
  */
 public interface WxCpExternalContactService {
+
+  /**
+   * 配置客户联系「联系我」方式
+   * <pre>
+   * 企业可以在管理后台-客户联系中配置成员的「联系我」的二维码或者小程序按钮，客户通过扫描二维码或点击小程序上的按钮，即可获取成员联系方式，主动联系到成员。
+   * 企业可通过此接口为具有客户联系功能的成员生成专属的「联系我」二维码或者「联系我」按钮。
+   * 如果配置的是「联系我」按钮，需要开发者的小程序接入小程序插件。
+   *
+   * 注意:
+   * 通过API添加的「联系我」不会在管理端进行展示，每个企业可通过API最多配置50万个「联系我」。
+   * 用户需要妥善存储返回的config_id，config_id丢失可能导致用户无法编辑或删除「联系我」。
+   * 临时会话模式不占用「联系我」数量，但每日最多添加10万个，并且仅支持单人。
+   * 临时会话模式的二维码，添加好友完成后该二维码即刻失效。
+   * </pre>
+   *
+   * @param info 客户联系「联系我」方式
+   * @return
+   * @throws WxErrorException
+   */
+  WxCpContactWayResult addContactWay(@NonNull WxCpContactWayInfo info) throws WxErrorException;
+
+  /**
+   * 获取企业已配置的「联系我」方式
+   *
+   * <pre>
+   * <b>批量</b>获取企业配置的「联系我」二维码和「联系我」小程序按钮。
+   * </pre>
+   *
+   * @param configId 联系方式的配置id,必填
+   * @return
+   * @throws WxErrorException
+   */
+  WxCpContactWayInfo getContactWay(@NonNull String configId) throws WxErrorException;
+
+  /**
+   * 更新企业已配置的「联系我」方式
+   *
+   * <pre>
+   * 更新企业配置的「联系我」二维码和「联系我」小程序按钮中的信息，如使用人员和备注等。
+   * </pre>
+   *
+   * @param info 客户联系「联系我」方式
+   * @return
+   * @throws WxErrorException
+   */
+  WxCpBaseResp updateContactWay(@NonNull WxCpContactWayInfo info) throws WxErrorException;
+
+  /**
+   * 删除企业已配置的「联系我」方式
+   *
+   * <pre>
+   * 删除一个已配置的「联系我」二维码或者「联系我」小程序按钮。
+   * </pre>
+   *
+   * @param configId 企业联系方式的配置id,必填
+   * @return
+   * @throws WxErrorException
+   */
+  WxCpBaseResp deleteContactWay(@NonNull String configId) throws WxErrorException;
+
+  /**
+   * 结束临时会话
+   *
+   * <pre>
+   * 将指定的企业成员和客户之前的临时会话断开，断开前会自动下发已配置的结束语。
+   *
+   * 注意：请保证传入的企业成员和客户之间有仍然有效的临时会话, 通过<b>其他方式的添加外部联系人无法通过此接口关闭会话</b>。
+   * </pre>
+   *
+   * @param userId
+   * @param externalUserId
+   * @return
+   * @throws WxErrorException
+   */
+  WxCpBaseResp closeTempChat(@NonNull String userId, @NonNull String externalUserId) throws WxErrorException;
+
+
   /**
    * 获取外部联系人详情.
    * <pre>
@@ -88,6 +166,7 @@ public interface WxCpExternalContactService {
 
   /**
    * 企业和第三方可通过此接口，获取所有离职成员的客户列表，并可进一步调用离职成员的外部联系人再分配接口将这些客户重新分配给其他企业成员。
+   *
    * @param page
    * @param pageSize
    * @return
@@ -97,22 +176,24 @@ public interface WxCpExternalContactService {
 
   /**
    * 企业可通过此接口，将已离职成员的外部联系人分配给另一个成员接替联系。
+   *
    * @param externalUserid
    * @param handOverUserid
    * @param takeOverUserid
    * @return
    * @throws WxErrorException
    */
-  WxCpBaseResp transferExternalContact(String externalUserid,String handOverUserid,String takeOverUserid)throws WxErrorException;
+  WxCpBaseResp transferExternalContact(String externalUserid, String handOverUserid, String takeOverUserid) throws WxErrorException;
 
-   /** <pre>
-    * 该接口用于获取配置过客户群管理的客户群列表。
-    * 企业需要使用“客户联系”secret或配置到“可调用应用”列表中的自建应用secret所获取的accesstoken来调用（accesstoken如何获取？）。
-    * 暂不支持第三方调用。
-    * 微信文档：https://work.weixin.qq.com/api/doc/90000/90135/92119
-    * </pre>
-    */
-  WxCpUserExternalGroupChatList listGroupChat(Integer pageIndex,Integer pageSize,int status,String[] userIds,String[] partyIds) throws WxErrorException;
+  /**
+   * <pre>
+   * 该接口用于获取配置过客户群管理的客户群列表。
+   * 企业需要使用“客户联系”secret或配置到“可调用应用”列表中的自建应用secret所获取的accesstoken来调用（accesstoken如何获取？）。
+   * 暂不支持第三方调用。
+   * 微信文档：https://work.weixin.qq.com/api/doc/90000/90135/92119
+   * </pre>
+   */
+  WxCpUserExternalGroupChatList listGroupChat(Integer pageIndex, Integer pageSize, int status, String[] userIds, String[] partyIds) throws WxErrorException;
 
   /**
    * <pre>
@@ -135,6 +216,7 @@ public interface WxCpExternalContactService {
    * 第三方应用需拥有“企业客户”权限。
    * 第三方/自建应用调用时传入的userid和partyid要在应用的可见范围内;
    * </pre>
+   *
    * @param startTime
    * @param endTime
    * @param userIds
@@ -150,6 +232,7 @@ public interface WxCpExternalContactService {
    * 企业需要使用“客户联系”secret或配置到“可调用应用”列表中的自建应用secret所获取的accesstoken来调用（accesstoken如何获取？）。
    * 暂不支持第三方调用。
    * </pre>
+   *
    * @param startTime
    * @param orderBy
    * @param orderAsc
@@ -160,5 +243,64 @@ public interface WxCpExternalContactService {
    * @return
    * @throws WxErrorException
    */
-  WxCpUserExternalGroupChatStatistic getGroupChatStatistic(Date startTime,Integer orderBy,Integer orderAsc,Integer pageIndex,Integer pageSize, String[] userIds, String[] partyIds) throws WxErrorException;
+  WxCpUserExternalGroupChatStatistic getGroupChatStatistic(Date startTime, Integer orderBy, Integer orderAsc, Integer pageIndex, Integer pageSize, String[] userIds, String[] partyIds) throws WxErrorException;
+
+  WxCpMsgTemplateAddResult addMsgTemplate(WxCpMsgTemplate wxCpMsgTemplate) throws WxErrorException;
+
+
+  /**
+   * <pre>
+   * 企业可通过此接口获取企业客户标签详情。
+   * </pre>
+   * @param tagId
+   * @return
+   */
+  WxCpUserExternalTagGroupList getCorpTagList(String [] tagId) throws WxErrorException;
+
+
+  /**
+   * <pre>
+   * 企业可通过此接口向客户标签库中添加新的标签组和标签，每个企业最多可配置3000个企业标签。
+   * 暂不支持第三方调用。
+   * </pre>
+   * @param tagGroup
+   * @return
+   */
+  WxCpUserExternalTagGroupInfo addCorpTag(WxCpUserExternalTagGroupInfo tagGroup)throws WxErrorException;
+
+  /**
+   * <pre>
+   * 企业可通过此接口编辑客户标签/标签组的名称或次序值。
+   * 暂不支持第三方调用。
+   * </pre>
+   * @param id
+   * @param name
+   * @param order
+   * @return
+   */
+  WxCpBaseResp  editCorpTag(String id,String name,Integer order)throws WxErrorException;
+
+  /**
+   * <pre>
+   * 企业可通过此接口删除客户标签库中的标签，或删除整个标签组。
+   * 暂不支持第三方调用。
+   * </pre>
+   * @param tagId
+   * @param groupId
+   * @return
+   */
+  WxCpBaseResp  delCorpTag(String [] tagId,String[] groupId)throws WxErrorException;
+
+  /**
+   * <pre>
+   * 企业可通过此接口为指定成员的客户添加上由企业统一配置的标签。
+   * https://work.weixin.qq.com/api/doc/90000/90135/92117
+   * </pre>
+   * @param userid
+   * @param externalUserid
+   * @param addTag
+   * @param removeTag
+   * @return
+   */
+  WxCpBaseResp  markTag(String userid,String externalUserid,String[] addTag,String [] removeTag)throws WxErrorException;
 }

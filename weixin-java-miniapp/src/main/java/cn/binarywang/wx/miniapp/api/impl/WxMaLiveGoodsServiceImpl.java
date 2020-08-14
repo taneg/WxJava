@@ -9,9 +9,8 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import lombok.AllArgsConstructor;
-import me.chanjar.weixin.common.WxType;
+import me.chanjar.weixin.common.enums.WxType;
 import me.chanjar.weixin.common.error.WxError;
 import me.chanjar.weixin.common.error.WxErrorException;
 import me.chanjar.weixin.common.util.json.GsonParser;
@@ -30,8 +29,7 @@ import java.util.Map;
  */
 @AllArgsConstructor
 public class WxMaLiveGoodsServiceImpl implements WxMaLiveGoodsService {
-
-  private WxMaService wxMaService;
+  private final WxMaService wxMaService;
 
   @Override
   public WxMaLiveResult addGoods(WxMaLiveInfo.Goods goods) throws WxErrorException {
