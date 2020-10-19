@@ -5,7 +5,8 @@ import com.google.inject.Inject;
 import me.chanjar.weixin.common.error.WxErrorException;
 import me.chanjar.weixin.cp.api.ApiTestModule;
 import me.chanjar.weixin.cp.api.WxCpService;
-import me.chanjar.weixin.cp.bean.*;
+import me.chanjar.weixin.cp.bean.WxCpBaseResp;
+import me.chanjar.weixin.cp.bean.external.*;
 import org.apache.commons.lang3.time.DateFormatUtils;
 import org.testng.annotations.Guice;
 import org.testng.annotations.Test;
@@ -22,7 +23,7 @@ public class WxCpExternalContactServiceImplTest {
   private WxCpService wxCpService;
   @Inject
   protected ApiTestModule.WxXmlCpInMemoryConfigStorage configStorage;
-  private String userId = "someone" + System.currentTimeMillis();
+  private final String userId = "someone" + System.currentTimeMillis();
 
   @Test
   public void testGetExternalContact() throws WxErrorException {
@@ -35,21 +36,24 @@ public class WxCpExternalContactServiceImplTest {
   @Test
   public void testAddContactWay() throws WxErrorException {
 
-    final String concatUserId = "符合要求的userId";
+    final String concatUserId = "HuangXiaoMing";
+
+    WxCpContactWayInfo.ContactWay wayInfo = new WxCpContactWayInfo.ContactWay();
+    wayInfo.setType(WxCpContactWayInfo.TYPE.SINGLE);
+    wayInfo.setScene(WxCpContactWayInfo.SCENE.QRCODE);
+    wayInfo.setUsers(Lists.newArrayList(concatUserId));
+    wayInfo.setRemark("CreateDate:" + DateFormatUtils.ISO_8601_EXTENDED_DATETIME_FORMAT.format(new Date()));
 
     WxCpContactWayInfo info = new WxCpContactWayInfo();
-    info.setType(WxCpContactWayInfo.TYPE.SIGLE);
-    info.setScene(WxCpContactWayInfo.SCENE.MINIPROGRAM);
-    info.setUsers(Lists.newArrayList(concatUserId));
-    info.setRemark("CreateDate:" + DateFormatUtils.ISO_8601_EXTENDED_DATETIME_FORMAT.format(new Date()));
+    info.setContactWay(wayInfo);
     this.wxCpService.getExternalContactService().addContactWay(info);
   }
 
   @Test
   public void testGetContactWay() throws WxErrorException {
-    final String configId = "2d7a68c657663afbd1d90db19a4b5ee9";
+    final String configId = "39fea3d93e30faaa8c7a9edd4cfe4d08";
     WxCpContactWayInfo contactWayInfo = this.wxCpService.getExternalContactService().getContactWay(configId);
-    System.out.println(contactWayInfo);
+    System.out.println(contactWayInfo.toJson());
     assertNotNull(contactWayInfo);
   }
 
@@ -57,10 +61,12 @@ public class WxCpExternalContactServiceImplTest {
   public void testUpdateContactWay() throws WxErrorException {
     final String configId = "2d7a68c657663afbd1d90db19a4b5ee9";
     final String concatUserId = "符合要求的userId";
+    WxCpContactWayInfo.ContactWay wayInfo = new WxCpContactWayInfo.ContactWay();
+    wayInfo.setConfigId(configId);
+    wayInfo.setUsers(Lists.newArrayList(concatUserId));
+    wayInfo.setRemark("CreateDate:" + DateFormatUtils.ISO_8601_EXTENDED_DATETIME_FORMAT.format(new Date()));
     WxCpContactWayInfo info = new WxCpContactWayInfo();
-    info.setConfigId(configId);
-    info.setUsers(Lists.newArrayList(concatUserId));
-    info.setRemark("CreateDate:" + DateFormatUtils.ISO_8601_EXTENDED_DATETIME_FORMAT.format(new Date()));
+    info.setContactWay(wayInfo);
     WxCpBaseResp resp = this.wxCpService.getExternalContactService().updateContactWay(info);
     System.out.println(resp);
     assertNotNull(resp);
@@ -106,7 +112,7 @@ public class WxCpExternalContactServiceImplTest {
 
   @Test
   public void testGetCorpTagList() throws WxErrorException {
-    String tag[]={};
+    String[] tag = {};
     WxCpUserExternalTagGroupList result = this.wxCpService.getExternalContactService().getCorpTagList(null);
     System.out.println(result);
     assertNotNull(result);
@@ -116,7 +122,7 @@ public class WxCpExternalContactServiceImplTest {
   public void testAddCorpTag() throws WxErrorException {
 
     List<WxCpUserExternalTagGroupInfo.Tag> list = new ArrayList<>();
-    WxCpUserExternalTagGroupInfo.Tag  tag = new  WxCpUserExternalTagGroupInfo.Tag();
+    WxCpUserExternalTagGroupInfo.Tag tag = new WxCpUserExternalTagGroupInfo.Tag();
     tag.setName("测试标签20");
     tag.setOrder(1);
     list.add(tag);
@@ -146,10 +152,10 @@ public class WxCpExternalContactServiceImplTest {
   @Test
   public void testDelCorpTag() throws WxErrorException {
 
-    String tagId[] = {};
-    String groupId[] = {"et2omCCwAAM3WzL00QpK9xARab3HGkAg"};
+    String[] tagId = {};
+    String[] groupId = {"et2omCCwAAM3WzL00QpK9xARab3HGkAg"};
 
-    WxCpBaseResp result = this.wxCpService.getExternalContactService().delCorpTag(tagId,groupId);
+    WxCpBaseResp result = this.wxCpService.getExternalContactService().delCorpTag(tagId, groupId);
 
     System.out.println(result);
     assertNotNull(result);
@@ -158,15 +164,70 @@ public class WxCpExternalContactServiceImplTest {
   @Test
   public void testMarkTag() throws WxErrorException {
 
-    String userid="HuangXiaoMing";
-    String externalUserid="wo2omCCwAAzR0Rt1omz-90o_XJkPGXIQ";
-    String addTag[] = {"et2omCCwAAzdcSK-RV80YS9sbpCXlNlQ"};
-    String removeTag[] = {};
+    String userid = "HuangXiaoMing";
+    String externalUserid = "wo2omCCwAAzR0Rt1omz-90o_XJkPGXIQ";
+    String[] addTag = {"et2omCCwAAzdcSK-RV80YS9sbpCXlNlQ"};
+    String[] removeTag = {};
 
-    WxCpBaseResp result = this.wxCpService.getExternalContactService().markTag(userid,externalUserid,addTag,removeTag);
+    WxCpBaseResp result = this.wxCpService.getExternalContactService().markTag(userid, externalUserid, addTag, removeTag);
 
     System.out.println(result);
     assertNotNull(result);
   }
 
+  @Test
+  public void testDeleteContactWay() {
+  }
+
+  @Test
+  public void testListFollowers() {
+  }
+
+  @Test
+  public void testListUnassignedList() {
+  }
+
+  @Test
+  public void testTransferExternalContact() {
+  }
+
+  @Test
+  public void testListGroupChat() {
+  }
+
+  @Test
+  public void testGetGroupChat() {
+  }
+
+  @Test
+  public void testGetUserBehaviorStatistic() {
+  }
+
+  @Test
+  public void testGetGroupChatStatistic() {
+  }
+
+  @Test
+  public void testAddMsgTemplate() {
+  }
+
+  @Test
+  public void testSendWelcomeMsg() throws WxErrorException {
+    this.wxCpService.getExternalContactService().sendWelcomeMsg(WxCpWelcomeMsg.builder()
+      .welcomeCode("abc")
+      .build());
+  }
+
+  @Test
+  public void testUpdateRemark() throws WxErrorException {
+    this.wxCpService.getExternalContactService().updateRemark(WxCpUpdateRemarkRequest.builder()
+      .description("abc")
+      .userId("aaa")
+      .externalUserId("aaa")
+      .remark("aa")
+      .remarkCompany("aaa")
+      .remarkMobiles(new String[]{"111","222"})
+      .remarkPicMediaId("aaa")
+      .build());
+  }
 }

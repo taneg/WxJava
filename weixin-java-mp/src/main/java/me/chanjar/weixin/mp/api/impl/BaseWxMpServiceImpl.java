@@ -7,8 +7,10 @@ import com.google.gson.JsonObject;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import me.chanjar.weixin.common.api.WxConsts;
 import me.chanjar.weixin.common.api.WxImgProcService;
 import me.chanjar.weixin.common.api.WxOcrService;
+import me.chanjar.weixin.common.bean.ToJson;
 import me.chanjar.weixin.common.bean.WxAccessToken;
 import me.chanjar.weixin.common.bean.WxJsapiSignature;
 import me.chanjar.weixin.common.bean.WxNetCheckResult;
@@ -16,6 +18,7 @@ import me.chanjar.weixin.common.enums.TicketType;
 import me.chanjar.weixin.common.enums.WxType;
 import me.chanjar.weixin.common.error.WxError;
 import me.chanjar.weixin.common.error.WxErrorException;
+import me.chanjar.weixin.common.error.WxRuntimeException;
 import me.chanjar.weixin.common.session.StandardSessionManager;
 import me.chanjar.weixin.common.session.WxSessionManager;
 import me.chanjar.weixin.common.util.DataUtils;
@@ -27,9 +30,7 @@ import me.chanjar.weixin.common.util.json.WxGsonBuilder;
 import me.chanjar.weixin.mp.api.*;
 import me.chanjar.weixin.mp.bean.WxMpSemanticQuery;
 import me.chanjar.weixin.mp.bean.result.WxMpCurrentAutoReplyInfo;
-import me.chanjar.weixin.mp.bean.result.WxMpOAuth2AccessToken;
 import me.chanjar.weixin.mp.bean.result.WxMpSemanticQueryResult;
-import me.chanjar.weixin.mp.bean.result.WxMpUser;
 import me.chanjar.weixin.mp.config.WxMpConfigStorage;
 import me.chanjar.weixin.mp.enums.WxMpApiUrl;
 import me.chanjar.weixin.mp.util.WxMpConfigStorageHolder;
@@ -121,7 +122,11 @@ public abstract class BaseWxMpServiceImpl<H, P> implements WxMpService, RequestH
 
   @Getter
   @Setter
-  private WxOAuth2Service oAuth2Service = new WxOAuth2ServiceImpl(this);
+  private WxMpGuideService guideService = new WxMpGuideServiceImpl(this);
+
+  @Getter
+  @Setter
+  private WxOAuth2Service oAuth2Service = new WxMpOAuth2ServiceImpl(this);
 
   private Map<String, WxMpConfigStorage> configStorageMap;
 
@@ -202,9 +207,8 @@ public abstract class BaseWxMpServiceImpl<H, P> implements WxMpService, RequestH
   @Override
   public String shortUrl(String longUrl) throws WxErrorException {
     if (longUrl.contains("&access_token=")) {
-      throw new WxErrorException(WxError.builder().errorCode(-1)
-        .errorMsg("要转换的网址中存在非法字符｛&access_token=｝，会导致微信接口报错，属于微信bug，请调整地址，否则不建议使用此方法！")
-        .build());
+      throw new WxErrorException("要转换的网址中存在非法字符｛&access_token=｝，" +
+        "会导致微信接口报错，属于微信bug，请调整地址，否则不建议使用此方法！");
     }
 
     JsonObject o = new JsonObject();
@@ -221,45 +225,9 @@ public abstract class BaseWxMpServiceImpl<H, P> implements WxMpService, RequestH
   }
 
   @Override
-  public String oauth2buildAuthorizationUrl(String redirectURI, String scope, String state) {
-    return String.format(CONNECT_OAUTH2_AUTHORIZE_URL.getUrl(this.getWxMpConfigStorage()),
-      this.getWxMpConfigStorage().getAppId(), URIUtil.encodeURIComponent(redirectURI), scope, StringUtils.trimToEmpty(state));
-  }
-
-  @Override
   public String buildQrConnectUrl(String redirectUri, String scope, String state) {
     return String.format(QRCONNECT_URL.getUrl(this.getWxMpConfigStorage()), this.getWxMpConfigStorage().getAppId(),
       URIUtil.encodeURIComponent(redirectUri), scope, StringUtils.trimToEmpty(state));
-  }
-
-  private WxMpOAuth2AccessToken getOAuth2AccessToken(String url) throws WxErrorException {
-    try {
-      RequestExecutor<String, String> executor = SimpleGetRequestExecutor.create(this);
-      String responseText = executor.execute(url, null, WxType.MP);
-      return WxMpOAuth2AccessToken.fromJson(responseText);
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  @Override
-  public WxMpOAuth2AccessToken oauth2getAccessToken(String code) throws WxErrorException {
-    return this.oAuth2Service.getAccessToken(code);
-  }
-
-  @Override
-  public WxMpOAuth2AccessToken oauth2refreshAccessToken(String refreshToken) throws WxErrorException {
-    return this.oAuth2Service.refreshAccessToken(refreshToken);
-  }
-
-  @Override
-  public WxMpUser oauth2getUserInfo(WxMpOAuth2AccessToken token, String lang) throws WxErrorException {
-      return this.oAuth2Service.getUserInfo(token,lang);
-  }
-
-  @Override
-  public boolean oauth2validateAccessToken(WxMpOAuth2AccessToken token) {
-    return this.oAuth2Service.validateAccessToken(token);
   }
 
   @Override
@@ -316,6 +284,21 @@ public abstract class BaseWxMpServiceImpl<H, P> implements WxMpService, RequestH
   }
 
   @Override
+  public String post(WxMpApiUrl url, JsonObject jsonObject) throws WxErrorException {
+    return this.post(url.getUrl(this.getWxMpConfigStorage()), jsonObject.toString());
+  }
+
+  @Override
+  public String post(String url, ToJson obj) throws WxErrorException {
+    return this.post(url, obj.toJson());
+  }
+
+  @Override
+  public String post(String url, JsonObject jsonObject) throws WxErrorException {
+    return this.post(url, jsonObject.toString());
+  }
+
+  @Override
   public String post(String url, Object obj) throws WxErrorException {
     return this.execute(SimplePostRequestExecutor.create(this), url, WxGsonBuilder.create().toJson(obj));
   }
@@ -338,7 +321,7 @@ public abstract class BaseWxMpServiceImpl<H, P> implements WxMpService, RequestH
         if (retryTimes + 1 > this.maxRetryTimes) {
           log.warn("重试达到最大次数【{}】", maxRetryTimes);
           //最后一次重试失败后，直接抛出异常，不再等待
-          throw new RuntimeException("微信服务端异常，超出重试次数");
+          throw new WxRuntimeException("微信服务端异常，超出重试次数");
         }
 
         WxError error = e.getError();
@@ -349,7 +332,7 @@ public abstract class BaseWxMpServiceImpl<H, P> implements WxMpService, RequestH
             log.warn("微信系统繁忙，{} ms 后重试(第{}次)", sleepMillis, retryTimes + 1);
             Thread.sleep(sleepMillis);
           } catch (InterruptedException e1) {
-            throw new RuntimeException(e1);
+            throw new WxRuntimeException(e1);
           }
         } else {
           throw e;
@@ -358,7 +341,7 @@ public abstract class BaseWxMpServiceImpl<H, P> implements WxMpService, RequestH
     } while (retryTimes++ < this.maxRetryTimes);
 
     log.warn("重试达到最大次数【{}】", this.maxRetryTimes);
-    throw new RuntimeException("微信服务端异常，超出重试次数");
+    throw new WxRuntimeException("微信服务端异常，超出重试次数");
   }
 
   protected <T, E> T executeInternal(RequestExecutor<T, E> executor, String uri, E data) throws WxErrorException {
@@ -377,13 +360,7 @@ public abstract class BaseWxMpServiceImpl<H, P> implements WxMpService, RequestH
       return result;
     } catch (WxErrorException e) {
       WxError error = e.getError();
-      /*
-       * 发生以下情况时尝试刷新access_token
-       * 40001 获取 access_token 时 AppSecret 错误，或者 access_token 无效。请开发者认真比对 AppSecret 的正确性，或查看是否正在为恰当的公众号调用接口
-       * 42001 access_token 超时，请检查 access_token 的有效期，请参考基础支持 - 获取 access_token 中，对 access_token 的详细机制说明
-       * 40014 不合法的 access_token ，请开发者认真比对 access_token 的有效性（如是否过期），或查看是否正在为恰当的公众号调用接口
-       */
-      if (error.getErrorCode() == 42001 || error.getErrorCode() == 40001 || error.getErrorCode() == 40014) {
+      if (WxConsts.ACCESS_TOKEN_ERROR_CODES.contains(error.getErrorCode())) {
         // 强制设置wxMpConfigStorage它的access token过期了，这样在下一次请求里就会刷新access token
         Lock lock = this.getWxMpConfigStorage().getAccessTokenLock();
         lock.lock();
@@ -397,6 +374,7 @@ public abstract class BaseWxMpServiceImpl<H, P> implements WxMpService, RequestH
           lock.unlock();
         }
         if (this.getWxMpConfigStorage().autoRefreshToken()) {
+          log.warn("即将重新获取新的access_token，错误代码：{}，错误信息：{}", error.getErrorCode(), error.getErrorMsg());
           return this.execute(executor, uri, data);
         }
       }
@@ -408,7 +386,7 @@ public abstract class BaseWxMpServiceImpl<H, P> implements WxMpService, RequestH
       return null;
     } catch (IOException e) {
       log.error("\n【请求地址】: {}\n【请求参数】：{}\n【异常信息】：{}", uriWithAccessToken, dataForLog, e.getMessage());
-      throw new WxErrorException(WxError.builder().errorMsg(e.getMessage()).build(), e);
+      throw new WxErrorException(e);
     }
   }
 
@@ -488,7 +466,7 @@ public abstract class BaseWxMpServiceImpl<H, P> implements WxMpService, RequestH
       return this;
     }
 
-    throw new RuntimeException(String.format("无法找到对应【%s】的公众号配置信息，请核实！", mpId));
+    throw new WxRuntimeException(String.format("无法找到对应【%s】的公众号配置信息，请核实！", mpId));
   }
 
   @Override
@@ -517,4 +495,13 @@ public abstract class BaseWxMpServiceImpl<H, P> implements WxMpService, RequestH
     return this;
   }
 
+  @Override
+  public WxMpGuideService getGuideService() {
+    return this.guideService;
+  }
+
+  @Override
+  public void setGuideService(WxMpGuideService guideService) {
+    this.guideService = guideService;
+  }
 }

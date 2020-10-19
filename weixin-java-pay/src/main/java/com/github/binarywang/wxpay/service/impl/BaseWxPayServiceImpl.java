@@ -23,6 +23,7 @@ import com.github.binarywang.wxpay.util.XmlConfig;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Maps;
 import jodd.io.ZipUtil;
+import me.chanjar.weixin.common.error.WxRuntimeException;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,6 +63,7 @@ public abstract class BaseWxPayServiceImpl implements WxPayService {
   private ProfitSharingService profitSharingService = new ProfitSharingServiceImpl(this);
   private RedpackService redpackService = new RedpackServiceImpl(this);
   private PayScoreService payScoreService = new PayScoreServiceImpl(this);
+  private EcommerceService ecommerceService = new EcommerceServiceImpl(this);
 
   /**
    * The Config.
@@ -86,6 +88,11 @@ public abstract class BaseWxPayServiceImpl implements WxPayService {
   @Override
   public RedpackService getRedpackService() {
     return this.redpackService;
+  }
+
+  @Override
+  public EcommerceService getEcommerceService() {
+    return ecommerceService;
   }
 
   @Override
@@ -242,27 +249,6 @@ public abstract class BaseWxPayServiceImpl implements WxPayService {
       throw new WxPayException("发生异常，" + e.getMessage(), e);
     }
 
-  }
-
-  @Override
-  public WxPaySendMiniProgramRedpackResult sendMiniProgramRedpack(WxPaySendMiniProgramRedpackRequest request)
-    throws WxPayException {
-    return this.redpackService.sendMiniProgramRedpack(request);
-  }
-
-  @Override
-  public WxPaySendRedpackResult sendRedpack(WxPaySendRedpackRequest request) throws WxPayException {
-    return this.redpackService.sendRedpack(request);
-  }
-
-  @Override
-  public WxPayRedpackQueryResult queryRedpack(String mchBillNo) throws WxPayException {
-    return this.redpackService.queryRedpack(mchBillNo);
-  }
-
-  @Override
-  public WxPayRedpackQueryResult queryRedpack(WxPayRedpackQueryRequest request) throws WxPayException {
-    return this.redpackService.queryRedpack(request);
   }
 
   @Override
@@ -424,7 +410,7 @@ public abstract class BaseWxPayServiceImpl implements WxPayService {
     WxPayUnifiedOrderResult unifiedOrderResult = this.unifiedOrder(request);
     String prepayId = unifiedOrderResult.getPrepayId();
     if (StringUtils.isBlank(prepayId)) {
-      throw new RuntimeException(String.format("无法获取prepay id，错误代码： '%s'，信息：%s。",
+      throw new WxRuntimeException(String.format("无法获取prepay id，错误代码： '%s'，信息：%s。",
         unifiedOrderResult.getErrCode(), unifiedOrderResult.getErrCodeDes()));
     }
 

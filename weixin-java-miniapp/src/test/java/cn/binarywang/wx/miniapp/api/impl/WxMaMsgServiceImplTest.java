@@ -12,9 +12,6 @@ import com.google.gson.JsonObject;
 import com.google.inject.Inject;
 import me.chanjar.weixin.common.error.WxErrorException;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -40,28 +37,6 @@ public class WxMaMsgServiceImplTest {
     this.wxService.getMsgService().sendKefuMsg(message);
   }
 
-  @Test(invocationCount = 5, threadPoolSize = 3)
-  public void testSendTemplateMsg() throws WxErrorException {
-    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-    TestConfig config = (TestConfig) this.wxService.getWxMaConfig();
-
-    WxMaTemplateMessage templateMessage = WxMaTemplateMessage.builder()
-      .toUser(config.getOpenid())
-      .formId("FORMID")
-      .page("index")
-      .data(Lists.newArrayList(
-        new WxMaTemplateData("keyword1", "339208499"),
-        new WxMaTemplateData("keyword2", dateFormat.format(new Date())),
-        new WxMaTemplateData("keyword3", "粤海喜来登酒店"),
-        new WxMaTemplateData("keyword4", "广州市天河区天河路208号")))
-      .templateId(config.getTemplateId())
-      .emphasisKeyword("keyword1.DATA")
-      .build();
-    //templateMessage.addData( new WxMaTemplateData("keyword1", "339208499", "#173177"));
-    this.wxService.getMsgService().sendTemplateMsg(templateMessage);
-  }
-
-
   @Test
   public void testSendSubscribeMsg() throws WxErrorException {
     TestConfig config = (TestConfig) this.wxService.getWxMaConfig();
@@ -69,8 +44,8 @@ public class WxMaMsgServiceImplTest {
     WxMaSubscribeMessage message = new WxMaSubscribeMessage();
     message.setTemplateId(config.getTemplateId());
     message.setToUser(config.getOpenid());
-    message.setLang(WxMaConstants.MiniprogramLang.ZH_CN);
-    message.setMiniprogramState(WxMaConstants.MiniprogramState.FORMAL);
+    message.setLang(WxMaConstants.MiniProgramLang.ZH_CN);
+    message.setMiniprogramState(WxMaConstants.MiniProgramState.FORMAL);
     message.addData(new WxMaSubscribeMessage.Data("thing1", "苹果到货啦"));
     message.addData(new WxMaSubscribeMessage.Data("amount3", "¥5"));
     message.addData(new WxMaSubscribeMessage.Data("thing5", "记得领取哦"));

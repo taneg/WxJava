@@ -19,6 +19,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.security.PrivateKey;
+import java.security.cert.X509Certificate;
 import java.util.Collections;
 
 /**
@@ -115,8 +116,6 @@ public class WxPayConfig {
    * apiV3 证书序列号值
    */
   private String certSerialNo;
-
-
   /**
    * 微信支付分serviceId
    */
@@ -127,8 +126,23 @@ public class WxPayConfig {
    */
   private String payScoreNotifyUrl;
 
-  private CloseableHttpClient apiV3HttpClient;
 
+  /**
+   * 微信支付分授权回调地址
+   */
+  private String payScorePermissionNotifyUrl;
+
+
+  private CloseableHttpClient apiV3HttpClient;
+  /**
+   * 私钥信息
+   */
+  private PrivateKey privateKey;
+
+  /**
+   * 证书自动更新时间差(分钟)，默认一分钟
+   */
+  private int certAutoUpdateTime = 60;
 
   /**
    * p12证书文件内容的字节数组.
@@ -197,44 +211,7 @@ public class WxPayConfig {
       if (StringUtils.isBlank(this.getKeyPath())) {
         throw new WxPayException("请确保证书文件地址keyPath已配置");
       }
-
-      final String prefix = "classpath:";
-      String fileHasProblemMsg = String.format(PROBLEM_MSG, this.getKeyPath());
-      String fileNotFoundMsg = String.format(NOT_FOUND_MSG, this.getKeyPath());
-      if (this.getKeyPath().startsWith(prefix)) {
-        String path = RegExUtils.removeFirst(this.getKeyPath(), prefix);
-        if (!path.startsWith("/")) {
-          path = "/" + path;
-        }
-        try {
-          inputStream = ResourcesUtil.getResourceAsStream(path);
-          if (inputStream == null) {
-            throw new WxPayException(fileNotFoundMsg);
-          }
-        } catch (Exception e) {
-          throw new WxPayException(fileNotFoundMsg, e);
-        }
-      } else if (this.getKeyPath().startsWith("http://") || this.getKeyPath().startsWith("https://")) {
-        try {
-          inputStream = new URL(this.keyPath).openStream();
-          if (inputStream == null) {
-            throw new WxPayException(fileNotFoundMsg);
-          }
-        } catch (IOException e) {
-          throw new WxPayException(fileNotFoundMsg, e);
-        }
-      } else {
-        try {
-          File file = new File(this.getKeyPath());
-          if (!file.exists()) {
-            throw new WxPayException(fileNotFoundMsg);
-          }
-
-          inputStream = new FileInputStream(file);
-        } catch (IOException e) {
-          throw new WxPayException(fileHasProblemMsg, e);
-        }
-      }
+      inputStream = this.loadConfigInputStream(this.getKeyPath());
     }
 
     try {
@@ -260,7 +237,7 @@ public class WxPayConfig {
   public CloseableHttpClient initApiV3HttpClient() throws WxPayException {
     String privateKeyPath = this.getPrivateKeyPath();
     String privateCertPath = this.getPrivateCertPath();
-    String certSerialNo = this.getCertSerialNo();
+    String serialNo = this.getCertSerialNo();
     String apiV3Key = this.getApiV3Key();
     if (StringUtils.isBlank(privateKeyPath)) {
       throw new WxPayException("请确保privateKeyPath已设置");
@@ -268,65 +245,86 @@ public class WxPayConfig {
     if (StringUtils.isBlank(privateCertPath)) {
       throw new WxPayException("请确保privateCertPath已设置");
     }
-    if (StringUtils.isBlank(certSerialNo)) {
-      throw new WxPayException("请确保certSerialNo证书序列号已设置");
-    }
+//    if (StringUtils.isBlank(certSerialNo)) {
+//      throw new WxPayException("请确保certSerialNo证书序列号已设置");
+//    }
     if (StringUtils.isBlank(apiV3Key)) {
       throw new WxPayException("请确保apiV3Key值已设置");
     }
 
-    InputStream keyInputStream = null;
-    InputStream certInputStream = null;
-    final String prefix = "classpath:";
-    if (privateKeyPath.startsWith(prefix)) {
-      String keypath = RegExUtils.removeFirst(privateKeyPath, prefix);
-      if (!keypath.startsWith("/")) {
-        keypath = "/" + keypath;
-      }
-      try {
-        keyInputStream = ResourcesUtil.getResourceAsStream(keypath);
-        if (keyInputStream == null) {
-          throw new WxPayException(String.format(NOT_FOUND_MSG, this.getPrivateKeyPath()));
-        }
-      } catch (Exception e) {
-        throw new WxPayException(String.format(NOT_FOUND_MSG, this.getPrivateKeyPath()), e);
-      }
-    }
-
-    if (privateCertPath.startsWith(prefix)) {
-      String certpath = RegExUtils.removeFirst(privateCertPath, prefix);
-      if (!certpath.startsWith("/")) {
-        certpath = "/" + certpath;
-      }
-      try {
-        certInputStream = ResourcesUtil.getResourceAsStream(certpath);
-        if (certInputStream == null) {
-          throw new WxPayException(String.format(NOT_FOUND_MSG, this.getPrivateCertPath()));
-        }
-      } catch (Exception e) {
-        throw new WxPayException(String.format(NOT_FOUND_MSG, this.getPrivateCertPath()), e);
-      }
-    }
-
+    InputStream keyInputStream = this.loadConfigInputStream(privateKeyPath);
+    InputStream certInputStream = this.loadConfigInputStream(privateCertPath);
     try {
       PrivateKey merchantPrivateKey = PemUtils.loadPrivateKey(keyInputStream);
+      X509Certificate certificate = PemUtils.loadCertificate(certInputStream);
+      if(StringUtils.isBlank(serialNo)){
+        this.certSerialNo = certificate.getSerialNumber().toString(16).toUpperCase();
+      }
 
       AutoUpdateCertificatesVerifier verifier = new AutoUpdateCertificatesVerifier(
         new WxPayCredentials(mchId, new PrivateKeySigner(certSerialNo, merchantPrivateKey)),
-        apiV3Key.getBytes(StandardCharsets.UTF_8));
-
+        apiV3Key.getBytes(StandardCharsets.UTF_8), this.getCertAutoUpdateTime());
 
       CloseableHttpClient httpClient = WxPayV3HttpClientBuilder.create()
         .withMerchant(mchId, certSerialNo, merchantPrivateKey)
-        .withWechatpay(Collections.singletonList(PemUtils.loadCertificate(certInputStream)))
+        .withWechatpay(Collections.singletonList(certificate))
         .withValidator(new WxPayValidator(verifier))
         .build();
       this.apiV3HttpClient = httpClient;
       this.verifier=verifier;
+      this.privateKey = merchantPrivateKey;
 
       return httpClient;
     } catch (Exception e) {
       throw new WxPayException("v3请求构造异常！", e);
     }
+  }
+
+  /**
+   * 从配置路径 加载配置 信息（支持 classpath、本地路径、网络url）
+   * @param configPath 配置路径
+   * @return
+   * @throws WxPayException
+   */
+  private InputStream loadConfigInputStream(String configPath) throws WxPayException {
+    InputStream inputStream;
+    final String prefix = "classpath:";
+    String fileHasProblemMsg = String.format(PROBLEM_MSG, configPath);
+    String fileNotFoundMsg = String.format(NOT_FOUND_MSG, configPath);
+    if (configPath.startsWith(prefix)) {
+      String path = RegExUtils.removeFirst(configPath, prefix);
+      if (!path.startsWith("/")) {
+        path = "/" + path;
+      }
+      try {
+        inputStream = ResourcesUtil.getResourceAsStream(path);
+        if (inputStream == null) {
+          throw new WxPayException(fileNotFoundMsg);
+        }
+      } catch (Exception e) {
+        throw new WxPayException(fileNotFoundMsg, e);
+      }
+    } else if (configPath.startsWith("http://") || configPath.startsWith("https://")) {
+      try {
+        inputStream = new URL(configPath).openStream();
+        if (inputStream == null) {
+          throw new WxPayException(fileNotFoundMsg);
+        }
+      } catch (IOException e) {
+        throw new WxPayException(fileNotFoundMsg, e);
+      }
+    } else {
+      try {
+        File file = new File(configPath);
+        if (!file.exists()) {
+          throw new WxPayException(fileNotFoundMsg);
+        }
+
+        inputStream = new FileInputStream(file);
+      } catch (IOException e) {
+        throw new WxPayException(fileHasProblemMsg, e);
+      }
+    }
+    return inputStream;
   }
 }
