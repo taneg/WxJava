@@ -1,6 +1,7 @@
 package me.chanjar.weixin.cp.tp.service.impl;
 
 import com.google.common.base.Joiner;
+import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -45,10 +46,16 @@ public abstract class BaseWxCpTpServiceImpl<H, P> implements WxCpTpService, Requ
    */
   protected final Object globalSuiteAccessTokenRefreshLock = new Object();
 
+
+  /**
+   * 全局刷新suite ticket的锁
+   */
+  protected final Object globalSuiteTicketRefreshLock = new Object();
+
   /**
    * 全局的是否正在刷新jsapi_ticket的锁.
    */
-  protected final Object globalSuiteTicketRefreshLock = new Object();
+  protected final Object globalJsApiTicketRefreshLock = new Object();
 
   protected WxCpTpConfigStorage configStorage;
 
@@ -79,16 +86,6 @@ public abstract class BaseWxCpTpServiceImpl<H, P> implements WxCpTpService, Requ
 
   @Override
   public String getSuiteTicket() throws WxErrorException {
-    return getSuiteTicket(false);
-  }
-
-  @Override
-  public String getSuiteTicket(boolean forceRefresh) throws WxErrorException {
-//     suite ticket由微信服务器推送，不能强制刷新
-//    if (forceRefresh) {
-//      this.configStorage.expireSuiteTicket();
-//    }
-
     if (this.configStorage.isSuiteTicketExpired()) {
       // 本地suite ticket 不存在或者过期
       WxError wxError = WxError.fromJson("{\"errcode\":40085, \"errmsg\":\"invaild suite ticket\"}", WxType.CP);
@@ -97,6 +94,68 @@ public abstract class BaseWxCpTpServiceImpl<H, P> implements WxCpTpService, Requ
     return this.configStorage.getSuiteTicket();
   }
 
+  @Override
+  public String getSuiteTicket(boolean forceRefresh) throws WxErrorException {
+//     suite ticket由微信服务器推送，不能强制刷新
+//    if (forceRefresh) {
+//      this.configStorage.expireSuiteTicket();
+//    }
+    return getSuiteTicket();
+  }
+
+  @Override
+  public void setSuiteTicket(String suiteTicket) throws WxErrorException {
+    synchronized (globalSuiteTicketRefreshLock) {
+      this.configStorage.updateSuiteTicket(suiteTicket, 10 * 60);
+    }
+  }
+
+  @Override
+  public String getSuiteJsApiTicket(String authCorpId) throws WxErrorException {
+    if (this.configStorage.isSuiteAccessTokenExpired()) {
+
+      String resp = get(configStorage.getApiUrl(GET_SUITE_JSAPI_TICKET),
+        "type=agent_config&access_token=" + this.configStorage.getAccessToken(authCorpId));
+
+      JsonObject jsonObject = GsonParser.parse(resp);
+      if (jsonObject.get("errcode").getAsInt() == 0) {
+        String jsApiTicket = jsonObject.get("ticket").getAsString();
+        int expiredInSeconds = jsonObject.get("expires_in").getAsInt();
+        synchronized (globalJsApiTicketRefreshLock) {
+          configStorage.updateAuthSuiteJsApiTicket(authCorpId, jsApiTicket, expiredInSeconds);
+        }
+      }
+      else {
+        throw new WxErrorException(WxError.fromJson(resp));
+      }
+    }
+
+    return configStorage.getSuiteAccessToken();
+  }
+
+  @Override
+  public String getAuthCorpJsApiTicket(String authCorpId) throws WxErrorException {
+    if (this.configStorage.isSuiteAccessTokenExpired()) {
+
+      String resp = get(configStorage.getApiUrl(GET_AUTH_CORP_JSAPI_TICKET),
+        "access_token=" + this.configStorage.getAccessToken(authCorpId));
+
+      JsonObject jsonObject = GsonParser.parse(resp);
+      if (jsonObject.get("errcode").getAsInt() == 0) {
+        String jsApiTicket = jsonObject.get("ticket").getAsString();
+        int expiredInSeconds = jsonObject.get("expires_in").getAsInt();
+
+        synchronized (globalJsApiTicketRefreshLock) {
+          configStorage.updateAuthCorpJsApiTicket(authCorpId, jsApiTicket, expiredInSeconds);
+        }
+      }
+      else {
+        throw new WxErrorException(WxError.fromJson(resp));
+      }
+    }
+
+    return configStorage.getSuiteAccessToken();
+  }
 
   @Override
   public WxCpMaJsCode2SessionResult jsCode2Session(String jsCode) throws WxErrorException {
@@ -144,6 +203,30 @@ public abstract class BaseWxCpTpServiceImpl<H, P> implements WxCpTpService, Requ
   public String getPreAuthUrl(String redirectUri, String state) throws WxErrorException {
     String result = get(configStorage.getApiUrl(GET_PREAUTH_CODE), null);
     WxCpTpPreauthCode preAuthCode = WxCpTpPreauthCode.fromJson(result);
+    String preAuthUrl = "https://open.work.weixin.qq.com/3rdapp/install?suite_id=" + configStorage.getSuiteId() +
+      "&pre_auth_code=" + preAuthCode.getPreAuthCode() + "&redirect_uri=" + URLEncoder.encode(redirectUri, "utf-8");
+    if (StringUtils.isNotBlank(state)) {
+      preAuthUrl += "&state=" + state;
+    }
+    return preAuthUrl;
+  }
+
+  @Override
+  @SneakyThrows
+  public String getPreAuthUrl(String redirectUri, String state, int authType) throws WxErrorException {
+    String result = get(configStorage.getApiUrl(GET_PREAUTH_CODE), null);
+    WxCpTpPreauthCode preAuthCode = WxCpTpPreauthCode.fromJson(result);
+    String setSessionUrl = "https://qyapi.weixin.qq.com/cgi-bin/service/set_session_info";
+
+    Map<String,Object> sessionInfo = new HashMap<>(1);
+    sessionInfo.put("auth_type", authType);
+    Map<String,Object> param = new HashMap<>(2);
+    param.put("pre_auth_code", preAuthCode.getPreAuthCode());
+    param.put("session_info", sessionInfo);
+    String postData = new Gson().toJson(param);
+
+    post(setSessionUrl, postData);
+
     String preAuthUrl = "https://open.work.weixin.qq.com/3rdapp/install?suite_id=" + configStorage.getSuiteId() +
       "&pre_auth_code=" + preAuthCode.getPreAuthCode() + "&redirect_uri=" + URLEncoder.encode(redirectUri, "utf-8");
     if (StringUtils.isNotBlank(state)) {
@@ -282,6 +365,21 @@ public abstract class BaseWxCpTpServiceImpl<H, P> implements WxCpTpService, Requ
   @Override
   public WxSessionManager getSessionManager() {
     return this.sessionManager;
+  }
+
+  @Override
+  public WxCpTpUserInfo getUserInfo3rd(String code) throws WxErrorException{
+    String url = configStorage.getApiUrl(GET_USERINFO3RD);
+    String result = get(url+"?code="+code,null);
+    return WxCpTpUserInfo.fromJson(result);
+  }
+
+  @Override
+  public WxCpTpUserDetail getUserDetail3rd(String userTicket) throws WxErrorException{
+    JsonObject jsonObject = new JsonObject();
+    jsonObject.addProperty("user_ticket", userTicket);
+    String result = post(configStorage.getApiUrl(GET_USERDETAIL3RD), jsonObject.toString());
+    return WxCpTpUserDetail.fromJson(result);
   }
 
 }

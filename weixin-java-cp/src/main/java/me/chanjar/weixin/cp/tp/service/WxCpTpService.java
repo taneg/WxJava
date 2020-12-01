@@ -6,10 +6,7 @@ import me.chanjar.weixin.common.session.WxSessionManager;
 import me.chanjar.weixin.common.util.http.MediaUploadRequestExecutor;
 import me.chanjar.weixin.common.util.http.RequestExecutor;
 import me.chanjar.weixin.common.util.http.RequestHttp;
-import me.chanjar.weixin.cp.bean.WxCpMaJsCode2SessionResult;
-import me.chanjar.weixin.cp.bean.WxCpTpAuthInfo;
-import me.chanjar.weixin.cp.bean.WxCpTpCorp;
-import me.chanjar.weixin.cp.bean.WxCpTpPermanentCodeInfo;
+import me.chanjar.weixin.cp.bean.*;
 import me.chanjar.weixin.cp.config.WxCpTpConfigStorage;
 
 /**
@@ -73,11 +70,34 @@ public interface WxCpTpService {
    * 详情请见：https://work.weixin.qq.com/api/doc#90001/90143/90628
    * </pre>
    *
+   * @Deprecated 由于无法主动刷新，所以这个接口实际已经没有意义，需要在接收企业微信的主动推送后，保存这个ticket
+   * @see #setSuiteTicket(String)
+   *
    * @param forceRefresh 强制刷新
    * @return the suite ticket
    * @throws WxErrorException the wx error exception
    */
+  @Deprecated
   String getSuiteTicket(boolean forceRefresh) throws WxErrorException;
+
+  /**
+   * <pre>
+   * 保存企业微信定时推送的suite_ticket,（每10分钟）
+   * 详情请见：https://work.weixin.qq.com/api/doc#90001/90143/90628
+   * </pre>
+   *
+   * @param suiteTicket
+   * @throws WxErrorException
+   */
+  void setSuiteTicket(String suiteTicket) throws WxErrorException;
+
+  /**
+   * 获取应用的 jsapi ticket
+   *
+   * @param authCorpId 授权企业的cropId
+   * @return jsapi ticket
+   */
+  String getSuiteJsApiTicket(String authCorpId) throws WxErrorException;
 
   /**
    * 小程序登录凭证校验
@@ -135,6 +155,20 @@ public interface WxCpTpService {
   String getPreAuthUrl(String redirectUri, String state) throws WxErrorException;
 
   /**
+   * <pre>
+   *   获取预授权链接，测试环境下使用
+   *   @Link https://work.weixin.qq.com/api/doc/90001/90143/90602
+   * </pre>
+   *
+   * @param redirectUri 授权完成后的回调网址
+   * @param state       a-zA-Z0-9的参数值（不超过128个字节），用于第三方自行校验session，防止跨域攻击
+   * @param authType    授权类型：0 正式授权， 1 测试授权。
+   * @return pre auth url
+   * @throws WxErrorException the wx error exception
+   */
+  String getPreAuthUrl(String redirectUri, String state, int authType) throws WxErrorException;
+
+  /**
    * 获取企业的授权信息
    *
    * @param authCorpId    授权企业的corpId
@@ -143,6 +177,14 @@ public interface WxCpTpService {
    * @throws WxErrorException the wx error exception
    */
   WxCpTpAuthInfo getAuthInfo(String authCorpId, String permanentCode) throws WxErrorException;
+
+  /**
+   * 获取授权企业的 jsapi ticket
+   *
+   * @param authCorpId 授权企业的cropId
+   * @return jsapi ticket
+   */
+  String getAuthCorpJsApiTicket(String authCorpId) throws WxErrorException;
 
   /**
    * 当本Service没有实现某个API的时候，可以用这个，针对所有微信API中的GET请求.
@@ -209,8 +251,10 @@ public interface WxCpTpService {
   /**
    * 获取WxMpConfigStorage 对象.
    *
+   * @Deprecated storage应该在service内部使用，提供这个接口，容易破坏这个封装
    * @return WxMpConfigStorage wx cp tp config storage
    */
+  @Deprecated
   WxCpTpConfigStorage getWxCpTpConfigStorage();
 
   /**
@@ -233,4 +277,24 @@ public interface WxCpTpService {
    * @return WxSessionManager session manager
    */
   WxSessionManager getSessionManager();
+
+  /**
+   * <pre>
+   * 获取访问用户身份
+   * </pre>
+   *
+   * @param code
+   * @return
+   */
+  WxCpTpUserInfo getUserInfo3rd(String code) throws WxErrorException;
+
+  /**
+   * <pre>
+   * 获取访问用户敏感信息
+   * </pre>
+   *
+   * @param userTicket
+   * @return
+   */
+  WxCpTpUserDetail getUserDetail3rd(String userTicket) throws WxErrorException;
 }
